@@ -3,266 +3,325 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>나만의 장소 검색 서비스</title>
+    <title>카카오맵 도망 서비스 - 대피처 검색</title>
     <style>
+        /* 기본 여백 초기화 및 전체 화면 설정 */
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-
-        body, html {
+        html, body {
+            width: 100%;
             height: 100%;
             font-family: 'Malgun Gothic', dotum, sans-serif;
         }
 
+        /* 화면을 왼쪽과 오른쪽으로 2분할하는 컨테이너 */
         .container {
             display: flex;
-            height: 100vh;
             width: 100%;
+            height: 100%;
         }
 
-        /* 왼쪽 사이드바 */
-        #sidebar {
+        /* 왼쪽 사이드바 (검색창 + 결과 리스트) */
+        .sidebar {
             width: 350px;
             height: 100%;
-            background: #ffffff;
-            border-right: 1px solid #ddd;
+            background-color: #f8f9fa;
             display: flex;
             flex-direction: column;
+            border-right: 1px solid #dee2e6;
             z-index: 10;
-            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
         }
 
-        .search-area {
-            padding: 20px;
-            background: #fee500; /* 카카오 테마색 */
-        }
-
+        /* 검색창 영역 */
         .search-box {
+            padding: 15px;
+            background-color: #ffffff;
+            border-bottom: 1px solid #dee2e6;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .search-form {
             display: flex;
             gap: 5px;
         }
-
-        input {
+        .search-input {
             flex: 1;
             padding: 10px;
-            border: 1px solid #ccc;
+            border: 1px solid #ced4da;
             border-radius: 4px;
-            outline: none;
+            font-size: 14px;
         }
-
-        button {
+        .search-button {
             padding: 10px 15px;
-            background: #333;
+            background-color: #ff4d4d; /* 도망/긴급 서비스 느낌의 강렬한 색상 */
             color: white;
             border: none;
             border-radius: 4px;
             cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .search-button:hover {
+            background-color: #e60000;
         }
 
-        /* 검색 결과 리스트 */
-        #result-list {
+        /* 검색 결과 리스트 영역 (스크롤 가능) */
+        .places-list {
             flex: 1;
             overflow-y: auto;
             list-style: none;
         }
-
-        .item {
+        .place-item {
             padding: 15px;
             border-bottom: 1px solid #eee;
+            background-color: #ffffff;
             cursor: pointer;
-            transition: background 0.2s;
+            transition: background-color 0.2s;
         }
-
-        .item:hover {
-            background-color: #f1f1f1;
+        .place-item:hover {
+            background-color: #f1f3f5;
         }
-
-        .item strong {
-            display: block;
-            color: #333;
+        .place-title {
             font-size: 16px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
         }
-
-        .item span {
+        .place-address {
             font-size: 13px;
             color: #666;
         }
 
-        /* 오른쪽 지도 */
-        #map {
+        /* 오른쪽 지도 영역 */
+        .map-container {
             flex: 1;
             height: 100%;
         }
 
-        /* 커스텀 오버레이/인포윈도우 스타일 */
-        .info-window {
+        /* 커스텀 이모지 마커 스타일 */
+        .emoji-marker {
+            font-size: 28px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+            cursor: pointer;
+        }
+
+        /* 팝업(인포윈도우) 내부 스타일 */
+        .popup-content {
             padding: 10px;
-            background: white;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            font-size: 12px;
+            font-size: 13px;
+            line-height: 1.4;
+            min-width: 200px;
+        }
+        .popup-title {
+            font-weight: bold;
+            margin-bottom: 4px;
+            color: #d32f2f;
         }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <div id="sidebar">
-        <div class="search-area">
-            <h2 style="margin-bottom: 10px;">📍 장소 검색</h2>
+    <div class="container">
+        <div class="sidebar">
             <div class="search-box">
-                <input type="text" id="keyword" placeholder="장소, 주소 검색">
-                <button id="search-btn">검색</button>
+                <form class="search-form" onsubmit="searchEmergencyPlaces(); return false;">
+                    <input type="text" id="keywordInput" class="search-input" placeholder="동네 이름을 입력하세요 (예: 역삼동)" value="역삼동">
+                    <button type="submit" class="search-button">검색</button>
+                </form>
             </div>
+            <ul id="placesList" class="places-list"></ul>
         </div>
-        <ul id="result-list">
-            </ul>
+
+        <div id="map" class="map-container"></div>
     </div>
-    <div id="map"></div>
-</div>
 
-<script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=8ec585b7c53b6c659ceb97f1660073a7&libraries=services"></script>
+    <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=0ef01a6cd07f54abba5b7342f2c3e983&libraries=services&autoload=false"></script>
+    
+    <script>
+        // 전역 변수 선언
+        let map;
+        let placeSearchService;
+        let infoWindow;
+        let markers = [];
+        let currentPositionMarker = null;
 
-<script>
-    // 1. 지도 초기 설정
-    const mapContainer = document.getElementById('map');
-    const mapOption = {
-        center: new kakao.maps.LatLng(37.566826, 126.9786567), // 기본 중심좌표
-        level: 5
-    };
-    const map = new kakao.maps.Map(mapContainer, mapOption);
+        // 지도 볌위 조절을 위한 객체
+        let mapBounds;
 
-    // 2. 전역 변수 설정
-    const ps = new kakao.maps.services.Places(); // 장소 검색 객체
-    const infowindow = new kakao.maps.InfoWindow({ zIndex: 1 }); // 정보 창 객체
-    let markers = []; // 생성된 마커를 담을 배열 (삭제를 위함)
-
-    // 3. 현재 위치 권한 요청 및 지도 이동
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(function(position) {
-            const lat = position.coords.latitude;
-            const lon = position.coords.longitude;
-            const locPosition = new kakao.maps.LatLng(lat, lon);
-            map.setCenter(locPosition);
+        // 카카오 지도 SDK가 완전히 로드된 후 실행되도록 보장
+        kakao.maps.load(function() {
+            initMap();
         });
-    }
 
-    // 4. 검색 버튼 및 엔터키 이벤트 바인딩
-    document.getElementById('search-btn').addEventListener('click', searchPlaces);
-    document.getElementById('keyword').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') searchPlaces();
-    });
+        // 지도 및 서비스 초기화
+        function initMap() {
+            const mapContainer = document.getElementById('map');
+            const defaultCenter = new kakao.maps.LatLng(37.566826, 126.9786567); // 서울시청
+            
+            const mapOptions = {
+                center: defaultCenter,
+                level: 5 // 지도 확대 레벨 5
+            };
 
-    // 5. 장소 검색 함수
-    function searchPlaces() {
-        const keyword = document.getElementById('keyword').value;
+            map = new kakao.maps.Map(mapContainer, mapOptions);
+            placeSearchService = new kakao.maps.services.Places();
+            infoWindow = new kakao.maps.InfoWindow({ zIndex: 1 });
 
-        if (!keyword.replace(/^\s+|\s+$/g, '')) {
-            alert('키워드를 입력해주세요!');
-            return;
+            // 사용자 현재 위치 가져오기
+            getCurrentLocation();
         }
 
-        // 카카오 장소 검색 API 호출
-        ps.keywordSearch(keyword, placesSearchCB);
-    }
-
-    // 6. 검색 결과 콜백 함수
-    function placesSearchCB(data, status) {
-        if (status === kakao.maps.services.Status.OK) {
-            displayPlaces(data); // 검색 성공 시 결과 표시
-        } else if (status === kakao.maps.services.Status.ZERO_RESULT) {
-            alert('검색 결과가 없습니다.');
-        } else {
-            alert('오류가 발생했습니다.');
+        // 브라우저 Geolocation으로 현재 위치 탐색
+        function getCurrentLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        const lat = position.coords.latitude;
+                        const lon = position.coords.longitude;
+                        const currentPos = new kakao.maps.LatLng(lat, lon);
+                        
+                        map.setCenter(currentPos);
+                        
+                        // 현재 위치 마커 (기본 마커 사용)
+                        currentPositionMarker = new kakao.maps.Marker({
+                            map: map,
+                            position: currentPos
+                        });
+                        
+                        // 처음 접속 시 기본값('역삼동')으로 검색 수행
+                        searchEmergencyPlaces();
+                    }, 
+                    function(error) {
+                        console.error("위치 권한 획득 실패:", error);
+                        searchEmergencyPlaces();
+                    }
+                );
+            } else {
+                searchEmergencyPlaces();
+            }
         }
-    }
 
-    // 7. 결과 표시 (마커 + 리스트)
-    function displayPlaces(places) {
-        const listEl = document.getElementById('result-list');
-        const bounds = new kakao.maps.LatLngBounds();
+        // 경찰서와 소방서를 동시에 검색 요청하는 함수
+        function searchEmergencyPlaces() {
+            const areaKeyword = document.getElementById('keywordInput').value.trim();
 
-        // 기존 마커와 리스트 초기화
-        removeMarkers();
-        listEl.innerHTML = '';
+            if (!areaKeyword) {
+                alert('동네 이름을 입력해주세요!');
+                return false;
+            }
 
-        for (let i = 0; i < places.length; i++) {
-            const placePosition = new kakao.maps.LatLng(places[i].y, places[i].x);
-            
-            // 마커 생성 (이모지 사용을 위해 CustomOverlay 활용 가능하나, 여기서는 기본 마커를 사용하고 클릭 시 팝업에 집중)
-            const marker = addMarker(placePosition);
-            
-            // 지도 범위 확장을 위해 좌표 추가
-            bounds.extend(placePosition);
+            // 새로운 검색이 시작되므로 기존 데이터(마커, 리스트, 팝업) 전체 삭제
+            removeMarkers();
+            document.getElementById('placesList').innerHTML = '';
+            infoWindow.close();
 
-            // 리스트 아이템 생성
-            const itemEl = createListItem(i, places[i]);
-            
-            // 마커와 리스트 아이템에 이벤트 등록
-            (function(marker, title, address) {
-                // 지도 마커 클릭 이벤트
+            // 지도 범위를 재설정하기 위한 객체 초기화
+            mapBounds = new kakao.maps.LatLngBounds();
+
+            // 동네 이름 뒤에 '경찰서'와 '소방서'를 붙여 각각 검색 실행
+            placeSearchService.keywordSearch(areaKeyword + ' 경찰서', policeSearchCB);
+            placeSearchService.keywordSearch(areaKeyword + ' 소방서', fireStationCB);
+        }
+
+        // 경찰서 검색 완료 콜백
+        function policeSearchCB(data, status, pagination) {
+            if (status === kakao.maps.services.Status.OK) {
+                displayEmergencyPlaces(data, '👮');
+            }
+        }
+
+        // 소방서 검색 완료 콜백
+        function fireStationCB(data, status, pagination) {
+            if (status === kakao.maps.services.Status.OK) {
+                displayEmergencyPlaces(data, '🚒');
+            }
+        }
+
+        // 검색된 장소들을 화면에 표시 (이모지 분기 처리)
+        function displayEmergencyPlaces(places, emoji) {
+            const listEl = document.getElementById('placesList');
+
+            for (let i = 0; i < places.length; i++) {
+                const placePosition = new kakao.maps.LatLng(places[i].y, places[i].x);
+                const address = places[i].road_address_name ? places[i].road_address_name : places[i].address_name;
+                
+                // 1. 커스텀 이모지 마커 생성 및 지도 표시
+                const marker = addEmojiMarker(placePosition, emoji);
+                
+                // 2. 왼쪽 리스트 아이템 엘리먼트 생성
+                const itemEl = document.createElement('li');
+                itemEl.className = 'place-item';
+                itemEl.innerHTML = `
+                    <div class="place-title">${emoji} ${places[i].place_name}</div>
+                    <div class="place-address">${address}</div>
+                `;
+
+                // 마커와 리스트 아이템 클릭 시 팝업창(인포윈도우) 표시 이벤트 바인딩
+                const placeName = places[i].place_name;
+                
+                // 마커 클릭 시 팝업 노출
                 kakao.maps.event.addListener(marker, 'click', function() {
-                    displayInfoWindow(marker, title, address);
+                    openPopup(marker, placeName, address);
                 });
 
-                // 리스트 아이템 클릭 이벤트
+                // 리스트 아이템 클릭 시 지도 이동 후 팝업 노출
                 itemEl.onclick = function() {
-                    displayInfoWindow(marker, title, address);
-                    map.panTo(placePosition); // 해당 위치로 부드럽게 이동
+                    map.panTo(placePosition);
+                    openPopup(marker, placeName, address);
                 };
-            })(marker, places[i].place_name, places[i].address_name);
 
-            listEl.appendChild(itemEl);
+                listEl.appendChild(itemEl);
+                
+                // 검색된 모든 마커가 보이도록 지도 영역 확장
+                mapBounds.extend(placePosition);
+            }
+
+            // 모든 검색 결과가 포함되도록 지도 시점 조절
+            map.setBounds(mapBounds);
         }
 
-        // 검색된 장소들이 모두 보이도록 지도 영역 조정
-        map.setBounds(bounds);
-    }
+        // 이모지를 사용하는 커스텀 마커 추가 함수
+        function addEmojiMarker(position, emoji) {
+            // HTML 엘리먼트를 이용해 이모지 마커 생성 (CustomOverlay 활용)
+            const markerContent = document.createElement('div');
+            markerContent.className = 'emoji-marker';
+            markerContent.innerText = emoji;
 
-    // 8. 마커 생성 함수
-    function addMarker(position) {
-        const marker = new kakao.maps.Marker({
-            position: position
-        });
-        marker.setMap(map);
-        markers.push(marker); // 배열에 저장하여 나중에 지울 수 있게 함
-        return marker;
-    }
+            const customMarker = new kakao.maps.CustomOverlay({
+                position: position,
+                content: markerContent,
+                yAnchor: 0.9 // 이모지 하단이 좌표에 걸치도록 정렬
+            });
 
-    // 9. 기존 마커 제거 함수
-    function removeMarkers() {
-        for (let i = 0; i < markers.length; i++) {
-            markers[i].setMap(null);
+            customMarker.setMap(map);
+            markers.push(customMarker); // 삭제 관리를 위해 배열에 저장
+            return customMarker;
         }
-        markers = [];
-        infowindow.close(); // 팝업창도 닫기
-    }
 
-    // 10. 리스트 아이템 HTML 생성 함수
-    function createListItem(index, place) {
-        const el = document.createElement('li');
-        el.className = 'item';
-        el.innerHTML = `
-            <strong>${place.place_name}</strong>
-            <span>${place.road_address_name ? place.road_address_name : place.address_name}</span>
-        `;
-        return el;
-    }
+        // 이름과 주소를 보여주는 팝업창을 여는 함수
+        function openPopup(marker, title, address) {
+            const content = `
+                <div class="popup-content">
+                    <div class="popup-title">${title}</div>
+                    <div>${address}</div>
+                </div>
+            `;
+            
+            infoWindow.setContent(content);
+            // 일반 마커와 달리 CustomOverlay는 두 번째 인자로 넘겨 고정할 수 없으므로, 좌표를 직접 지정하여 오픈
+            infoWindow.setPosition(marker.getPosition());
+            infoWindow.open(map);
+        }
 
-    // 11. 인포윈도우(팝업) 표시 함수
-    function displayInfoWindow(marker, title, address) {
-        const content = `
-            <div class="info-window">
-                <strong>📍 ${title}</strong><br>
-                <span>${address}</span>
-            </div>
-        `;
-        infowindow.setContent(content);
-        infowindow.open(map, marker);
-    }
-</script>
-
+        // 기존 마커들을 지도에서 전부 제거하는 함수
+        function removeMarkers() {
+            for (let i = 0; i < markers.length; i++) {
+                markers[i].setMap(null);
+            }
+            markers = [];
+        }
+    </script>
 </body>
 </html>
